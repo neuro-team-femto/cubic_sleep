@@ -4,7 +4,6 @@ clc,clear all;close all;
 subs = [1,2,5,6,9,15,18,20,22,24,26,27,30,32,33,34,35,40,41,42]; 
 
 addpath(genpath('./utility/letswave7-master'));
-stage_folder = ['G:\Utilisateurs\zhenxing.hu\Project\cubic_sleep\data\LX_EEG\Staging\'];
 
 
 sub_folder = ['..\..\data\LX_EEG\data1\'];
@@ -79,7 +78,7 @@ for s_idx = 1:length(ls)
         t_ana_axis = [t_ana(1):t_ana(2)]/fs;
     end
 
-    % Extract dominant mode in wake state
+    % Extract the first SVD mode in wake and sleep state separately
     wav_wake = wav_ana(:,1:60*fs);
     [Uw,Sw,Vw] = svd(wav_wake,'econ');
     wav_sleep = wav_ana(:,(end-60*fs):end);
@@ -99,23 +98,20 @@ for s_idx = 1:length(ls)
         mode_sleep = Us(:,1);
     end
 
-    % Extract the low_dimensional dynamics
-    mu = (wav_ana-mode_sleep)'*(mode_wake-mode_sleep) / norm(mode_wake - mode_sleep,2).^2;
-    percen_5 = prctile(mu, 5);
-    percen_95 = prctile(mu, 95);
-    mu_trim = mu(mu >= percen_5 & mu <= percen_95);
-    mu_scale = (mu - min(mu_trim)) ./ (max(mu_trim)-min(mu_trim));
-    mu_scale(mu_scale>=1) = 1;
-    mu_scale(mu_scale<=0) = 0;
-    mu = smoothdata(mu_scale,"gaussian",300);
+    % Project normalized spectrogram to the difference of wake_mode and sleep_mode
+    wav_norm = wav_ana ./ vecnorm(wav_ana, 2, 1);
+    mu = (wav_norm-mode_sleep)'*(mode_wake-mode_sleep) / norm(mode_wake - mode_sleep,2).^2;
     
-    % Down-sample and normalize mu to the range [-1,1]
-    percen_10 = prctile(mu, 10);
-    percen_90 = prctile(mu, 90);
-    mu_trim = mu(mu >= percen_10 & mu <= percen_90);
-    mu = ((mu - min(mu_trim)) ./ (max(mu_trim)-min(mu_trim)))*2-1;
-    step = 100;
-    ds_mu = mu(1:step:end);
+    % Scale mu to [-1,1]
+    res_mu_norm = 2*mu_norm - 1;
+
+    % Mild smoothing serves as low-pass filtering before down-sampling.
+    res_mu_sm = smoothdata(res_mu_norm,"gaussian",100);
+
+    % Down-sampling avoid over-fitting and reduce computational load.
+    % efficiency 
+    step = 10;
+    ds_mu = res_mu_sm(1:step:end);
     if ~exist('./mu', 'dir')
         mkdir('./mu');
     end
