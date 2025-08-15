@@ -26,7 +26,7 @@ dt = 0.01
 param_names = ('alpha','t0','sigma')
 folder_path = os.path.join(parent_dir, 'embedding')
 files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-param_vals = np.zeros(len(param_names),len(files))
+param_vals = np.zeros((len(param_names),len(files)))
 
 
 def cubic_sde(x,t,t0,alpha,sigma,epislon):
@@ -73,7 +73,8 @@ for f_idx,filename in enumerate(files):
                 grid = np.linspace(samples.min(), samples.max(), 1000)
                 kde = gaussian_kde(samples)
                 kde_values = kde(grid)
-                param_vals[param_idx] = grid[np.argmax(kde_values)]
-            param_file = os.path.join(est_param_dir,'param_'+filename)
-            sio.savemat(param_file,{'est_alpha':param_vals[0],'est_t0':param_vals[1],'est_sigma':param_vals[2]})
+                param_vals[param_idx,f_idx] = grid[np.argmax(kde_values)]
+                
+param_file = os.path.join(est_param_dir,'param_'+filename)
+sio.savemat(param_file,{'est_alpha':param_vals[0],'est_t0':param_vals[1],'est_sigma':param_vals[2]})
             
