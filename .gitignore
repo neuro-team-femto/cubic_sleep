@@ -1,8 +1,0 @@
-.ipynb_checkpoints
-
-# Ignore any file whose name contains 'CLW'
-*CLW*
-
-# Ignore any file whose name contains 'FLW'
-*FLW*
-
