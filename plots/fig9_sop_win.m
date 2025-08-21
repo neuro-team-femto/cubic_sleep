@@ -1,14 +1,13 @@
 clc,clear all;close all;
 
-%selected subject with clear wake-to-sleep transition
-
-sub_folder = ['..\data\EEG\'];
+sub_folder = ['../data/EEG/'];
 ls = dir([sub_folder,'ds*mat']);
+
+% Focus on the first half hours
 fs = 100;
 t_start = 1*fs;
 t_end = 1800*fs;
 t = linspace(t_start,t_end,(t_end - t_start + 1)) / fs;
-
 
 % Wavelet parameter
 wavelet_name = 'cmor1-1.5';
@@ -18,24 +17,24 @@ freq_end = 20;
 num_bin = 200;
 w = linspace(freq_start,freq_end,num_bin)';
 scales = (central_freq/(1/fs))./w;
-
-% Defnie frequency band of interest
 delta_band = find( 0.5 < w & w < 4);
 alpha_band = find( 8 < w & w < 12);
 
-
-
+figure('Position',1.0e+03*[0.1818    0.1610    1.2144    0.5576]);
 for s_idx = 1:length(ls)
+    subplot(4,5,s_idx);
+
     data_file = [sub_folder,ls(s_idx).name];
-    load(data_file);
+    load(data_file)
     data = squeeze(data(:,1,:,:,:,t_start:t_end));
     
-    % Wavelet transformation
+    % Take the Wavelt representation
     amp_wav = abs(cwt(data',scales,wavelet_name));
+
     amp_ratio = sum(amp_wav(delta_band,:),1) ./ sum(amp_wav(alpha_band,:),1);
     sm_ratio= smoothdata(amp_ratio,"gaussian",300);
 
-    % 3 min larger than 1
+    % 1 min larger than 1
     thres_start = 1;
     dur_tran_start = 60*fs;
     cond = sm_ratio > thres_start;
@@ -66,53 +65,36 @@ for s_idx = 1:length(ls)
     t_tranend = run_starts(req_run_idx(1));
     t_ana = [t_transtart-200*fs, t_tranend+200*fs];
 
-    % It's possible 200s before the onset of transitions is already out of the beginning of the recording
+    % %% Extract dominant mode in wake and sleep state
     if t_ana(1) < 0
         wav_ana = amp_wav(:,[1:t_ana(2)]);
         t_ana_axis = [1:t_ana(2)]/fs;
     else
         wav_ana = amp_wav(:,[t_ana(1):t_ana(2)]);
+
+        %  
         t_ana_axis = [t_ana(1):t_ana(2)]/fs;
     end
-    
-    % Extract the first SVD mode in wake and sleep state separately
-    wav_wake = wav_ana(:,1:60*fs);
-    [Uw,Sw,Vw] = svd(wav_wake,'econ');
-    wav_sleep = wav_ana(:,(end-60*fs):end);
-    [Us,Ss,Vs] = svd(wav_sleep,'econ');
-   
 
-    % Make sure the mode is always positive
-    if Uw(:,1) < 0
-        mode_wake = -1*Uw(:,1);
+    sm_wav = smoothdata(abs(amp_wav),2,"gaussian",300);
+    hdl = imagesc(gca,t,w, sm_wav);hold on;
+    hdl.Parent.YDir = 'normal';
+    colormap turbo;
+    set(gca,'clim',[-8,30]);
+    set(gca,'ylim',[1,15]);
+    ylabel('Frequency [Hz]');
+    xlabel('Time [s]');  
+    plot([t_transtart,t_transtart]/fs,[1,15],'k','LineWidth',2);
+    plot([t_tranend,t_tranend]/fs,[1,15],'k','LineWidth',2);
+    set(gca,'xlim',[t(1),t_ana_axis(end)+200]);
+    area(gca,[t_ana_axis(1),t_ana_axis(1)+60], [15, 15], 'FaceColor', 'blue', 'FaceAlpha', 0.3);
+    area(gca,[t_ana_axis(end)-60,t_ana_axis(end)], [15, 15], 'FaceColor', 'blue', 'FaceAlpha', 0.3);
+    if t_ana_axis(1)-50 > 0
+        set(gca,'xlim',[t_ana_axis(1)-50,t_ana_axis(end)+50]);
     else
-        mode_wake = Uw(:,1);
+        set(gca,'xlim',[t_ana_axis(1),t_ana_axis(end)+50]);
     end
-
-    if Us(:,1) < 0
-        mode_sleep = -1*Us(:,1);
-    else
-        mode_sleep = Us(:,1);
-    end
-
-    % Project normalized spectrogram to the difference of wake_mode and sleep_mode
-    wav_norm = wav_ana ./ vecnorm(wav_ana, 2, 1);
-    mu = (wav_norm-mode_sleep)'*(mode_wake-mode_sleep) / norm(mode_wake - mode_sleep,2).^2;
-    
-    % Scale mu to [-1,1]
-    res_mu_norm = 2*mu - 1;
-
-    % Mild smoothing serves as low-pass filtering before down-sampling.
-    res_mu_sm = smoothdata(res_mu_norm,"gaussian",100);
-
-    % Down-sampling avoid over-fitting and reduce computational load.
-    % efficiency 
-    step = 10;
-    ds_mu = res_mu_sm(1:step:end);
-    if ~exist('../embedding', 'dir')
-        mkdir('./embedding');
-    end
-    filename = ['./embedding/',ls(subs(s_idx)).name(23:27),'.mat';];
-    save(filename,'ds_mu');
-
+    tit = ['sub',num2str(s_idx)];
+    title(gca,tit,'FontSize',12);
 end
+saveas(gcf,'../figures/fig9_sOP_win.png');
